@@ -1,0 +1,95 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - 'main'
+      - 'develop'
+  pull_request:
+    branches:
+      - 'main'
+      - 'develop'
+
+jobs:
+  unittest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: '1.22'
+
+      - name: Run Unit Tests
+        run: go test -v ./tests/...
+
+  build-and-release:
+    needs: unittest
+    # เปลี่ยนเงื่อนไขให้ทำงานทั้งกรณี push ไปยัง main และ pull request ไปยัง main
+    if: github.ref == 'refs/heads/main' || (github.event_name == 'pull_request' && github.base_ref == 'main')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: '1.22'
+
+      # สร้าง tag และ release เฉพาะเมื่อเป็นการ push ไปยัง main
+      - name: Generate Tag
+        id: tag
+        if: github.ref == 'refs/heads/main'
+        run: |
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          MAJOR=$(echo $LAST_TAG | cut -d. -f1 | sed 's/v//')
+          MINOR=$(echo $LAST_TAG | cut -d. -f2)
+          PATCH=$(echo $LAST_TAG | cut -d. -f3)
+          NEW_PATCH=$((PATCH + 1))
+          NEW_TAG="v$MAJOR.$MINOR.$NEW_PATCH"
+          echo "new_tag=$NEW_TAG" >> $GITHUB_OUTPUT
+          echo "Generated new tag: $NEW_TAG"
+      - name: Create GitHub Release
+        if: github.ref == 'refs/heads/main'
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.TOKEN }}
+        with:
+          tag_name: ${{ steps.tag.outputs.new_tag }}
+          release_name: Release ${{ steps.tag.outputs.new_tag }}
+          draft: false
+          prerelease: false
+
+      # กำหนด Docker tag ตามประเภทของ event
+      - name: Set Docker Tag
+        id: docker_tag
+        run: |
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            echo "tag=pr-${{ github.event.pull_request.number }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=${{ steps.tag.outputs.new_tag || 'latest' }}" >> $GITHUB_OUTPUT
+          fi
+      # Build Docker image ในทุกกรณี แต่แตกต่างกันตามประเภทของ event
+      - name: Build Docker Image
+        run: |
+          if [ "${{ github.ref }}" == "refs/heads/main" ]; then
+            docker build -f docker/prod.Dockerfile -t ithikorn/6510451131-wholesale-businessbackend-agdo:latest -t ithikorn/6510451131-wholesale-businessbackend-agdo:${{ steps.tag.outputs.new_tag }} .
+          else
+            docker build -f docker/prod.Dockerfile -t ithikorn/6510451131-wholesale-businessbackend-agdo:${{ steps.docker_tag.outputs.tag }} .
+          fi
+      # Push Docker image ในทุกกรณี แต่แตกต่างกันตามประเภทของ event
+      - name: Push Docker Image
+        run: |
+          echo "${{ secrets.DOCKERHUB_PASSWORD }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+          
+          if [ "${{ github.ref }}" == "refs/heads/main" ]; then
+            docker push ithikorn/6510451131-wholesale-businessbackend-agdo:latest
+            docker push ithikorn/6510451131-wholesale-businessbackend-agdo:${{ steps.tag.outputs.new_tag }}
+          else
+            docker push ithikorn/6510451131-wholesale-businessbackend-agdo:${{ steps.docker_tag.outputs.tag }}
+          fi
