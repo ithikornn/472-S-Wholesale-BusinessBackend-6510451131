@@ -78,9 +78,9 @@ jobs:
       - name: Build Docker Image
         run: |
           if [ "${{ github.ref }}" == "refs/heads/main" ]; then
-            docker build -f docker/prod.Dockerfile -t ithikorn/6510451131-Wholesale-BusinessBackend-AGDO:latest -t ithikorn/6510451131-Wholesale-BusinessBackend-AGDO:${{ steps.tag.outputs.new_tag }} .
+            docker build -f docker/prod.Dockerfile -t ithikorn/6510451131-wholesale-businessbackend-agdo:latest -t ithikorn/6510451131-wholesale-businessbackend-agdo:${{ steps.tag.outputs.new_tag }} .
           else
-            docker build -f docker/prod.Dockerfile -t ithikorn/6510451131-Wholesale-BusinessBackend-AGDO:${{ steps.docker_tag.outputs.tag }} .
+            docker build -f docker/prod.Dockerfile -t ithikorn/6510451131-wholesale-businessbackend-agdo:${{ steps.docker_tag.outputs.tag }} .
           fi
       # Push Docker image ในทุกกรณี แต่แตกต่างกันตามประเภทของ event
       - name: Push Docker Image
@@ -88,8 +88,8 @@ jobs:
           echo "${{ secrets.DOCKERHUB_PASSWORD }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
           
           if [ "${{ github.ref }}" == "refs/heads/main" ]; then
-            docker push ithikorn/6510451131-Wholesale-BusinessBackend-AGDO:latest
-            docker push ithikorn/6510451131-Wholesale-BusinessBackend-AGDO:${{ steps.tag.outputs.new_tag }}
+            docker push ithikorn/6510451131-wholesale-businessbackend-agdo:latest
+            docker push ithikorn/6510451131-wholesale-businessbackend-agdo:${{ steps.tag.outputs.new_tag }}
           else
-            docker push ithikorn/6510451131-Wholesale-BusinessBackend-AGDO:${{ steps.docker_tag.outputs.tag }}
+            docker push ithikorn/6510451131-wholesale-businessbackend-agdo:${{ steps.docker_tag.outputs.tag }}
           fi
